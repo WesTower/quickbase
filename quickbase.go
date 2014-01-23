@@ -464,3 +464,24 @@ func DumpTable(authinfo AuthInfo, table string, columns []int, path) {
 			"apptoken":authinfo.Apptoken
 		})
 	}*/
+
+// AddRecord adds a record; it uses the same conventions as EditRecord.
+func AddRecord(ticket Ticket, dbid string, fields map[string]string) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	for field, value := range fields {
+		params["_fnm_"+field] = value
+	}
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_AddRecord", params)
+	if err != nil {
+		return err
+	}
+	errCode := doc.SelectNode("", "errcode")
+	if errCode.Value != "0" {
+		errText := doc.SelectNode("", "errtext")
+		return fmt.Errorf("Error %s: %s", errCode, errText)
+	}
+	return nil
+}
