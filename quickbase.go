@@ -48,7 +48,7 @@ func Authenticate(url, username, password string) (ticket Ticket, err error) {
 	if err != nil {
 		return ticket, err
 	}
-	return Ticket{doc.SelectNode("", "ticket").Value, doc.SelectNode("", "userid").Value, url, ""}, nil
+	return Ticket{doc.SelectNode("", "ticket").GetValue(), doc.SelectNode("", "userid").GetValue(), url, ""}, nil
 }
 
 type ApiParam struct {
@@ -97,8 +97,8 @@ func executeApiCall(url, api_call string, parameters map[string]string) (doc *xm
 	if err != nil {
 		return nil, err
 	}
-	if errcode := doc.SelectNode("", "errcode").Value; errcode != "0" {
-		err = fmt.Errorf(doc.SelectNode("", "errtext").Value)
+	if errcode := doc.SelectNode("", "errcode").GetValue(); errcode != "0" {
+		err = fmt.Errorf(doc.SelectNode("", "errtext").GetValue())
 		return
 	}
 
@@ -127,7 +127,7 @@ func GetAppDTMInfo(baseUrl, dbid string) (received, nextAllowed time.Time, schem
 		return
 	}
 	errCode := doc.SelectNode("", "errcode")
-	if errCode.Value != "0" {
+	if errCode.GetValue() != "0" {
 		errText := doc.SelectNode("", "errtext")
 		err = fmt.Errorf("Error %s: %s", errCode, errText)
 		return
@@ -208,7 +208,7 @@ func selectNodeToTime(root NodeSelector, name string) (t time.Time, err error) {
 	if node == nil {
 		return t, fmt.Errorf("Tag named %s not found", name)
 	}
-	if msecs, err := strconv.ParseInt(node.Value, 10, 64); err != nil {
+	if msecs, err := strconv.ParseInt(node.GetValue(), 10, 64); err != nil {
 		return t, err
 	} else {
 		return time.Unix(msecs/1000, (msecs%1000)*1000), nil
@@ -230,7 +230,7 @@ func EditRecord(ticket Ticket, dbid string, recordId int, fields map[string]stri
 		return err
 	}
 	errCode := doc.SelectNode("", "errcode")
-	if errCode.Value != "0" {
+	if errCode.GetValue() != "0" {
 		errText := doc.SelectNode("", "errtext")
 		return fmt.Errorf("Error %s: %s", errCode, errText)
 	}
@@ -253,7 +253,7 @@ func DoQueryCount(ticket Ticket, dbid, query string) (count int64, err error) {
 	if countNode == nil {
 		return 0, fmt.Errorf("Invalid replay from QuickBase")
 	}
-	return strconv.ParseInt(countNode.Value, 10, 64);
+	return strconv.ParseInt(countNode.GetValue(), 10, 64);
 }
 
 func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string) (records []map[int]string, err error) {
@@ -281,7 +281,7 @@ func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string)
 		record_map := make(map[int]string)
 		for _, child := range record.Children {
 			
-			record_map[child.Ai("", "id")] = child.Value
+			record_map[child.Ai("", "id")] = child.GetValue()
 		}
 		records = append(records, record_map)
 	}
@@ -312,7 +312,7 @@ func DoQuery(ticket Ticket, dbid, query, clist, slist, options string) (records 
 	for _, record := range doc.SelectNodes("", "record") {
 		record_map := make(map[string]string)
 		for _, child := range record.Children {
-			record_map[child.Name.Local] = child.Value
+			record_map[child.Name.Local] = child.GetValue()
 		}
 		records = append(records, record_map)
 	}
@@ -479,7 +479,7 @@ func AddRecord(ticket Ticket, dbid string, fields map[string]string) (err error)
 		return err
 	}
 	errCode := doc.SelectNode("", "errcode")
-	if errCode.Value != "0" {
+	if errCode.GetValue() != "0" {
 		errText := doc.SelectNode("", "errtext")
 		return fmt.Errorf("Error %s: %s", errCode, errText)
 	}
