@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 	"strconv"
+	"time"
 )
 
 type AuthRequest struct {
@@ -106,7 +106,7 @@ func executeApiCall(url, api_call string, parameters map[string]string) (doc *xm
 }
 
 type SchemaModification struct {
-	Dbid string
+	Dbid           string
 	SchemaModified time.Time
 	RecordModified time.Time
 }
@@ -197,7 +197,7 @@ func GetAppDTMInfo(baseUrl, dbid string) (received, nextAllowed time.Time, schem
 }
 
 type NodeSelector interface {
-	SelectNode(space, local string) (*xmlx.Node)
+	SelectNode(space, local string) *xmlx.Node
 }
 
 func selectNodeToTime(root NodeSelector, name string) (t time.Time, err error) {
@@ -253,7 +253,7 @@ func DoQueryCount(ticket Ticket, dbid, query string) (count int64, err error) {
 	if countNode == nil {
 		return 0, fmt.Errorf("Invalid replay from QuickBase")
 	}
-	return strconv.ParseInt(countNode.GetValue(), 10, 64);
+	return strconv.ParseInt(countNode.GetValue(), 10, 64)
 }
 
 func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string) (records []map[int]string, err error) {
@@ -280,7 +280,7 @@ func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string)
 	for _, record := range doc.SelectNodes("", "record") {
 		record_map := make(map[int]string)
 		for _, child := range record.Children {
-			
+
 			record_map[child.Ai("", "id")] = child.GetValue()
 		}
 		records = append(records, record_map)
@@ -312,7 +312,28 @@ func DoQuery(ticket Ticket, dbid, query, clist, slist, options string) (records 
 	for _, record := range doc.SelectNodes("", "record") {
 		record_map := make(map[string]string)
 		for _, child := range record.Children {
-			record_map[child.Name.Local] = child.GetValue()
+			// Each child is a particular field.  A
+			// multi-line field may have multiple text
+			// nodes, separated by "<br/>" nodes.  This
+			// means that we need to collect up the values
+			// of all text children, and interpolate
+			// newlines where necessary.
+			//record_map[child.Name.Local] = child.GetValue()
+			for _, grandchild := range child.Children {
+				switch grandchild.Type {
+				case xmlx.NT_TEXT:
+					record_map[child.Name.Local] += grandchild.Value
+				case xmlx.NT_ELEMENT:
+					if grandchild.Name.Local == "BR" {
+						// apparently, QuickBase internally uses carriage returns to separate lines
+						record_map[child.Name.Local] += "\r"
+					} else {
+						return nil, fmt.Errorf("Cannot handle tag %s within value for field %s", grandchild.Name.Local, child.Name.Local)
+					}
+				default:
+					return nil, fmt.Errorf("Cannot handle non-text, non-element within value for field %s", child.Name.Local)
+				}
+			}
 		}
 		records = append(records, record_map)
 	}
@@ -406,7 +427,8 @@ func DoQueryChan(ticket Ticket, dbid, query, clist, slist string) (records chan 
 							last_field := ""
 							last_data := ""
 							in_record := true
-						record: for token, err := decoder.Token(); err != io.EOF; token, err = decoder.Token() {
+						record:
+							for token, err := decoder.Token(); err != io.EOF; token, err = decoder.Token() {
 								switch token := token.(type) {
 								case xml.StartElement:
 									switch {
@@ -435,7 +457,7 @@ func DoQueryChan(ticket Ticket, dbid, query, clist, slist string) (records chan 
 									last_data += string(token)
 								}
 							}
-							
+
 						}()
 						return records, nil
 					}
