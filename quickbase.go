@@ -511,3 +511,21 @@ func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, e
 	}
 	return strconv.Atoi(ridNode.GetValue())
 }
+
+func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	params["rid"] = strconv.Itoa(rid)
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_DeleteRecord", params)
+	if err != nil {
+		return err
+	}
+	errCode := doc.SelectNode("", "errcode")
+	if errCode.GetValue() != "0" {
+		errText := doc.SelectNode("", "errtext")
+		return fmt.Errorf("Error %s: %s", errCode, errText)
+	}
+	return nil
+}
