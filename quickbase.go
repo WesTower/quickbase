@@ -529,3 +529,55 @@ func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
 	}
 	return nil
 }
+
+func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	params["rid"] = strconv.Itoa(rid)
+	params["newowner"] = owner
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_ChangeRecordOwner", params)
+	if err != nil {
+		return err
+	}
+	errCode := doc.SelectNode("", "errcode")
+	if errCode.GetValue() != "0" {
+		errText := doc.SelectNode("", "errtext")
+		return fmt.Errorf("Error %s: %s", errCode, errText)
+	}
+	return nil
+}
+
+type User struct {
+	Id string
+	Name string
+	//Roles []Role
+}
+
+type Role struct {
+	Id int
+	Name string
+	Accesses []Access
+}
+
+type Access struct {
+	Id int
+	Name string
+}
+
+func UserRoles(ticket Ticket, dbid string) (users []User, err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_UserRoles", params)
+	if err != nil {
+		return nil, err
+	}
+	for _, userNode := range doc.SelectNodes("", "user") {
+		user := User{Id: userNode.As("", "id"), Name: userNode.S("", "name")}
+		users = append(users, user)
+	}
+	return users, nil
+}
