@@ -2,6 +2,7 @@ package quickbase
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	xmlx "github.com/jteeuwen/go-pkg-xmlx"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"os"
 )
 
 type AuthRequest struct {
@@ -510,4 +512,129 @@ func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, e
 		return 0, fmt.Errorf("No rid returned from API_AddRecord")
 	}
 	return strconv.Atoi(ridNode.GetValue())
+}
+
+func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	params["rid"] = strconv.Itoa(rid)
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_DeleteRecord", params)
+	if err != nil {
+		return err
+	}
+	errCode := doc.SelectNode("", "errcode")
+	if errCode.GetValue() != "0" {
+		errText := doc.SelectNode("", "errtext")
+		return fmt.Errorf("Error %s: %s", errCode, errText)
+	}
+	return nil
+}
+
+func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	params["rid"] = strconv.Itoa(rid)
+	params["newowner"] = owner
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_ChangeRecordOwner", params)
+	if err != nil {
+		return err
+	}
+	errCode := doc.SelectNode("", "errcode")
+	if errCode.GetValue() != "0" {
+		errText := doc.SelectNode("", "errtext")
+		return fmt.Errorf("Error %s: %s", errCode, errText)
+	}
+	return nil
+}
+
+type User struct {
+	Id string
+	Name string
+	//Roles []Role
+}
+
+type Role struct {
+	Id int
+	Name string
+	Accesses []Access
+}
+
+type Access struct {
+	Id int
+	Name string
+}
+
+func UserRoles(ticket Ticket, dbid string) (users []User, err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_UserRoles", params)
+	if err != nil {
+		return nil, err
+	}
+	for _, userNode := range doc.SelectNodes("", "user") {
+		user := User{Id: userNode.As("", "id"), Name: userNode.S("", "name")}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func Download(ticket Ticket, dbid string, rid, fid, vid int) (file io.ReadCloser, err error) {
+	url := fmt.Sprintf("%sup/%s/a/r%d/e%d/v%d?ticket=%s&apptoken=%s", ticket.url, dbid, rid, fid, vid, ticket.ticket, ticket.Apptoken)
+	if response, err := http.Get(url); err != nil {
+		return nil, err
+	} else {
+		return response.Body, nil
+	}
+}
+
+// Since Go is strongly-typed and I've not defined an interface for
+// field values yet, files must be individually uploaded to records.
+// This is a prime opportunity for refactoring.
+func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Reader) (err error) {
+	fmt.Println("uploading", ticket.url+"db/"+dbid)
+	reqReader, reqWriter := io.Pipe()
+	client := &http.Client{}
+	http_req, err := http.NewRequest("POST", ticket.url+"db/"+dbid, reqReader)
+	if err != nil {
+		return err
+	}
+	http_req.Header.Add("QUICKBASE-ACTION", "API_EditRecord")
+	http_req.Header.Add("Content-Type", "application/xml")
+	rw := io.MultiWriter(reqWriter, os.Stderr)
+	go func() {
+		fmt.Fprintf(rw, "<qdbapi><ticket>%s</ticket><apptoken>%s</apptoken><rid>%d</rid><field fid='%d' filename='%s'>", 
+			ticket.ticket, ticket.Apptoken, rid, fid, filename)
+		fmt.Println("encoding")
+		encoder := base64.NewEncoder(base64.StdEncoding, rw)
+		io.Copy(encoder, r)
+		fmt.Fprintf(rw, "</field></qdbapi>")
+		fmt.Println("encoded")
+		reqWriter.Close()
+	}()
+	fmt.Println("About to upload")
+	resp, err := client.Do(http_req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	fmt.Println("uploaded")
+
+	//tee := io.TeeReader(resp.Body, os.Stderr)
+	doc := xmlx.New()
+	err = doc.LoadStream(resp.Body, nil)
+	//err = doc.LoadStream(tee, nil)
+	if err != nil {
+		return err
+	}
+	if errcode := doc.SelectNode("", "errcode").GetValue(); errcode != "0" {
+		err = fmt.Errorf(doc.SelectNode("", "errtext").GetValue())
+		return
+	}
+	return nil
 }
