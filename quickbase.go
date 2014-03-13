@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-	"os"
 )
 
 type AuthRequest struct {
@@ -552,19 +551,19 @@ func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err e
 }
 
 type User struct {
-	Id string
+	Id   string
 	Name string
 	//Roles []Role
 }
 
 type Role struct {
-	Id int
-	Name string
+	Id       int
+	Name     string
 	Accesses []Access
 }
 
 type Access struct {
-	Id int
+	Id   int
 	Name string
 }
 
@@ -597,7 +596,6 @@ func Download(ticket Ticket, dbid string, rid, fid, vid int) (file io.ReadCloser
 // field values yet, files must be individually uploaded to records.
 // This is a prime opportunity for refactoring.
 func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Reader) (err error) {
-	fmt.Println("uploading", ticket.url+"db/"+dbid)
 	reqReader, reqWriter := io.Pipe()
 	client := &http.Client{}
 	http_req, err := http.NewRequest("POST", ticket.url+"db/"+dbid, reqReader)
@@ -606,24 +604,20 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 	}
 	http_req.Header.Add("QUICKBASE-ACTION", "API_EditRecord")
 	http_req.Header.Add("Content-Type", "application/xml")
-	rw := io.MultiWriter(reqWriter, os.Stderr)
 	go func() {
-		fmt.Fprintf(rw, "<qdbapi><ticket>%s</ticket><apptoken>%s</apptoken><rid>%d</rid><field fid='%d' filename='%s'>", 
+		fmt.Fprintf(reqWriter, "<qdbapi><ticket>%s</ticket><apptoken>%s</apptoken><rid>%d</rid><field fid='%d' filename='%s'>",
 			ticket.ticket, ticket.Apptoken, rid, fid, filename)
-		fmt.Println("encoding")
-		encoder := base64.NewEncoder(base64.StdEncoding, rw)
+		encoder := base64.NewEncoder(base64.StdEncoding, reqWriter)
 		io.Copy(encoder, r)
-		fmt.Fprintf(rw, "</field></qdbapi>")
-		fmt.Println("encoded")
+		encoder.Close()
+		fmt.Fprintf(reqWriter, "</field></qdbapi>")
 		reqWriter.Close()
 	}()
-	fmt.Println("About to upload")
 	resp, err := client.Do(http_req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	fmt.Println("uploaded")
 
 	//tee := io.TeeReader(resp.Body, os.Stderr)
 	doc := xmlx.New()
