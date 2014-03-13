@@ -609,7 +609,7 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 			ticket.ticket, ticket.Apptoken, rid, fid, filename)
 		encoder := base64.NewEncoder(base64.StdEncoding, reqWriter)
 		io.Copy(encoder, r)
-		encoder.Close()
+		encoder.Close() // flush & close the encoder, so that all data are sent
 		fmt.Fprintf(reqWriter, "</field></qdbapi>")
 		reqWriter.Close()
 	}()
