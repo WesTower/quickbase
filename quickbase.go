@@ -27,6 +27,7 @@ type AuthReply struct {
 
 type QuickBaseError struct {
 	Message string
+	Code    int
 }
 
 func (e QuickBaseError) Error() string {
@@ -100,8 +101,12 @@ func executeApiCall(url, api_call string, parameters map[string]string) (doc *xm
 		return nil, err
 	}
 	if errcode := doc.SelectNode("", "errcode").GetValue(); errcode != "0" {
-		err = fmt.Errorf(doc.SelectNode("", "errtext").GetValue())
-		return
+		//err = fmt.Errorf(doc.SelectNode("", "errtext").GetValue())
+		code, err := strconv.Atoi(errcode)
+		if err != nil {
+			return nil, err
+		}
+		return nil, QuickBaseError{Message: doc.SelectNode("", "errtext").GetValue(), Code: code}
 	}
 
 	return doc, nil
