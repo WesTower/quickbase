@@ -7,9 +7,11 @@ import (
 	"fmt"
 	xmlx "github.com/jteeuwen/go-pkg-xmlx"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 	"os"
 )
@@ -110,6 +112,32 @@ func executeApiCall(url, api_call string, parameters map[string]string) (doc *xm
 	}
 
 	return doc, nil
+}
+
+func executeRawApiCall(url, api_call string, parameters map[string]string) (resp *http.Response, err error) {
+	count := 0
+	for _, _ = range parameters {
+		count++
+	}
+	api_params := make([]ApiParam, count)
+	i := 0
+	for key, _ := range parameters {
+		api_params[i] = ApiParam{xml.Name{"", key}, parameters[key]}
+		i++
+	}
+	req := QuickBaseRequest{Params: api_params}
+	xml_req, err := xml.Marshal(req)
+	if err != nil {
+		return
+	}
+	client := &http.Client{}
+	http_req, err := http.NewRequest("POST", url, bytes.NewReader(xml_req))
+	if err != nil {
+		return nil, err
+	}
+	http_req.Header.Add("QUICKBASE-ACTION", api_call)
+	http_req.Header.Add("Content-Type", "application/xml")
+	return client.Do(http_req)
 }
 
 type SchemaModification struct {
@@ -494,6 +522,25 @@ func DumpTable(authinfo AuthInfo, table string, columns []int, path) {
 		})
 	}*/
 
+func GenResultsTable(ticket Ticket, dbid, query string, columns []int) (resp *http.Response, err error) {
+	strCols := make([]string, len(columns))
+	for i, col := range columns {
+		strCols[i] = strconv.Itoa(col)
+	}
+	clist := strings.Join(strCols, ".")
+	params := map[string]string{
+		"clist":clist,
+		"options":"csv",
+		"slist":"3",
+		"ticket":ticket.ticket,
+		"apptoken":ticket.Apptoken,
+	}
+	if query != "" {
+		params["query"] = query
+	}
+	return executeRawApiCall(ticket.url + "/db/" + dbid, "API_GenResultsTable", params)
+}
+
 // AddRecord adds a record; it uses the same conventions as EditRecord.
 func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, err error) {
 	params := map[string]string{"ticket": ticket.ticket}
@@ -642,4 +689,25 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 		return
 	}
 	return nil
+}
+
+func ImportFromCSV(ticket Ticket, dbid string, columns []int, r io.Reader) (err error) {
+	params := map[string]string{"ticket": ticket.ticket}
+	if ticket.Apptoken != "" {
+		params["apptoken"] = ticket.Apptoken
+	}
+	strCols := make([]string, len(columns))
+	for i, col := range columns {
+		strCols[i] = strconv.Itoa(col)
+	}
+	params["clist"] = strings.Join(strCols, ".")
+	params["skipfirst"] = "1"
+	// FIXME: it'd be nice to stream this, but how to properly escape CDATA in the CSV?
+	var csv []byte
+	if csv, err = ioutil.ReadAll(r); err != nil {
+		return
+	}
+	params["records_csv"] = string(csv)
+	_, err = executeApiCall(ticket.url+"db/"+dbid, "API_ImportFromCSV", params)
+	return err
 }
