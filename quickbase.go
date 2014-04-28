@@ -684,7 +684,6 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 	}
 	return nil
 }
-<<<<<<< HEAD
 
 func ImportFromCSV(ticket Ticket, dbid string, columns []int, r io.Reader) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
@@ -706,5 +705,3 @@ func ImportFromCSV(ticket Ticket, dbid string, columns []int, r io.Reader) (err 
 	_, err = executeApiCall(ticket.url+"db/"+dbid, "API_ImportFromCSV", params)
 	return err
 }
-=======
->>>>>>> master
