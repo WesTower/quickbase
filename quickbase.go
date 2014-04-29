@@ -160,12 +160,6 @@ func GetAppDTMInfo(baseUrl, dbid string) (received, nextAllowed time.Time, schem
 	if err != nil {
 		return
 	}
-	errCode := doc.SelectNode("", "errcode")
-	if errCode.GetValue() != "0" {
-		errText := doc.SelectNode("", "errtext")
-		err = fmt.Errorf("Error %s: %s", errCode, errText)
-		return
-	}
 	received, err = selectNodeToTime(doc, "RequestTime")
 	if err != nil {
 		return
@@ -259,16 +253,8 @@ func EditRecord(ticket Ticket, dbid string, recordId int, fields map[string]stri
 	for field, value := range fields {
 		params["_fnm_"+field] = value
 	}
-	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_EditRecord", params)
-	if err != nil {
-		return err
-	}
-	errCode := doc.SelectNode("", "errcode")
-	if errCode.GetValue() != "0" {
-		errText := doc.SelectNode("", "errtext")
-		return fmt.Errorf("Error %s: %s", errCode, errText)
-	}
-	return nil
+	_, err = executeApiCall(ticket.url+"db/"+dbid, "API_EditRecord", params)
+	return err
 }
 
 func DoQueryCount(ticket Ticket, dbid, query string) (count int64, err error) {
@@ -507,20 +493,6 @@ type AuthInfo struct {
 	Apptoken string
 }
 
-/*
-func DumpTable(authinfo AuthInfo, table string, columns []int, path) {
-	// try to pull in the entire table if possible
-	result := executeRawApiCall(authinfo.Ticket.url + '/db/' + table, \
-		'API_GenResultsTable',
-		map[string][string]{
-			"clist":clist,
-			"options":"csv",
-			"slist":"3",
-			"ticket":authinfo.Ticket.ticket,
-			"apptoken":authinfo.Apptoken
-		})
-	}*/
-
 func GenResultsTable(ticket Ticket, dbid, query string, columns []int) (resp *http.Response, err error) {
 	strCols := make([]string, len(columns))
 	for i, col := range columns {
@@ -528,16 +500,16 @@ func GenResultsTable(ticket Ticket, dbid, query string, columns []int) (resp *ht
 	}
 	clist := strings.Join(strCols, ".")
 	params := map[string]string{
-		"clist":clist,
-		"options":"csv",
-		"slist":"3",
-		"ticket":ticket.ticket,
-		"apptoken":ticket.Apptoken,
+		"clist":    clist,
+		"options":  "csv",
+		"slist":    "3",
+		"ticket":   ticket.ticket,
+		"apptoken": ticket.Apptoken,
 	}
 	if query != "" {
 		params["query"] = query
 	}
-	return executeRawApiCall(ticket.url + "/db/" + dbid, "API_GenResultsTable", params)
+	return executeRawApiCall(ticket.url+"/db/"+dbid, "API_GenResultsTable", params)
 }
 
 // AddRecord adds a record; it uses the same conventions as EditRecord.
@@ -553,11 +525,6 @@ func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, e
 	if err != nil {
 		return 0, err
 	}
-	errCode := doc.SelectNode("", "errcode")
-	if errCode.GetValue() != "0" {
-		errText := doc.SelectNode("", "errtext")
-		return 0, fmt.Errorf("Error %s: %s", errCode, errText)
-	}
 	ridNode := doc.SelectNode("", "rid")
 	if ridNode == nil {
 		return 0, fmt.Errorf("No rid returned from API_AddRecord")
@@ -571,16 +538,8 @@ func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
 		params["apptoken"] = ticket.Apptoken
 	}
 	params["rid"] = strconv.Itoa(rid)
-	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_DeleteRecord", params)
-	if err != nil {
-		return err
-	}
-	errCode := doc.SelectNode("", "errcode")
-	if errCode.GetValue() != "0" {
-		errText := doc.SelectNode("", "errtext")
-		return fmt.Errorf("Error %s: %s", errCode, errText)
-	}
-	return nil
+	_, err = executeApiCall(ticket.url+"db/"+dbid, "API_DeleteRecord", params)
+	return err
 }
 
 func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err error) {
@@ -590,16 +549,8 @@ func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err e
 	}
 	params["rid"] = strconv.Itoa(rid)
 	params["newowner"] = owner
-	doc, err := executeApiCall(ticket.url+"db/"+dbid, "API_ChangeRecordOwner", params)
-	if err != nil {
-		return err
-	}
-	errCode := doc.SelectNode("", "errcode")
-	if errCode.GetValue() != "0" {
-		errText := doc.SelectNode("", "errtext")
-		return fmt.Errorf("Error %s: %s", errCode, errText)
-	}
-	return nil
+	_, err = executeApiCall(ticket.url+"db/"+dbid, "API_ChangeRecordOwner", params)
+	return err
 }
 
 type User struct {
@@ -671,6 +622,7 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 	}
 	defer resp.Body.Close()
 
+	// FIXME: do we need to go through this rigamarole, or can we just return above?
 	//tee := io.TeeReader(resp.Body, os.Stderr)
 	doc := xmlx.New()
 	err = doc.LoadStream(resp.Body, nil)
