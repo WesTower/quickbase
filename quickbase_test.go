@@ -1,43 +1,22 @@
-package quickbase
+package quickbase_test
 
 import (
 	"testing"
 	"fmt"
-	"github.com/kless/goconfig/config"
+	"os"
+	"github.com/WesTower/freezing-avenger/lib/quickbase"
 )
 
-func read_config(path string, t *testing.T) (string, string, string) {
-	c, err := config.ReadDefault(path)
-	if err != nil {
-		t.Error(err.Error())
-		return "", "", ""
-	}
-	url, err := c.String("connection", "url")
-	if err != nil {
-		t.Error(err.Error())
-		return "", "", ""
-	}
-	username, err := c.String("connection", "username")
-	if err != nil {
-		t.Error(err.Error())
-		return "", "", ""
-	}
-	password, err := c.String("connection", "password")
-	if err != nil {
-		t.Error(err.Error())
-		return "", "", ""
-	}
-	return url, username, password
-}
-
 func TestAuthentication(t *testing.T) {
-	println("foobaz")
-	url, username, password := read_config("/home/buhl/.quickbase", t)
-	ticket, err := Authenticate(url, username, password)
-	if err != nil {
+	if _, err := authenticate(); err != nil {
 		fmt.Println(err)
 		t.Error(err.Error())
 		return
 	}
-	_ = ticket
+}
+
+func authenticate() (ticket quickbase.Ticket, err error) {
+	return quickbase.Authenticate(os.Getenv("QUICKBASE_URL"),
+		os.Getenv("QUICKBASE_USERNAME"),
+		os.Getenv("QUICKBASE_PASSWORD"))
 }
