@@ -80,4 +80,3 @@ func TestUserRoles(t *testing.T) {
 		t.Error(err)
 	}
 }
-	

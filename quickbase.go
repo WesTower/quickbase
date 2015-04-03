@@ -1,3 +1,29 @@
+// go-quickbase - Go bindings for Intuit's QuickBase
+// Copyright (C) 2012-2014 WesTower Communications
+// Copyright (C) 2014-2015 MasTec
+//
+// This file is part of go-quickbase.
+//
+// go-quickbase is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public
+// License along with this program.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+// Package go-quickbase provides access to Intuit's QuickBase API.
+//
+// QuickBase is a Web-accessible non-SQL relational database. While it
+// does have some limitations and quirks, it is an extremely effective
+// tool for rapid prototyping and development of end-user business
+// applications.
 package quickbase
 
 import (
@@ -19,22 +45,31 @@ import (
 // as documented at
 // <http://www.quickbase.com/api-guide/index.html#errorcodes.html>.
 type QuickBaseError struct {
-	Message string
-	Code    int
+	Message string // human-readable message; corresponds to errtext in a response
+	Code    int    // corresponds to errcode in a response
 }
 
 func (e QuickBaseError) Error() string {
 	return e.Message
 }
 
+// A Ticket represents a QuickBase authentication ticket.
 type Ticket struct {
 	ticket   string
 	userid   string
 	url      string
-	Apptoken string  // if set, then each call using this Ticket
-			 // will include this Apptoken
+	Apptoken string // if set, then each call using this Ticket
+	// will include this Apptoken
 }
 
+// Authenticate authenticates a user to QuickBase; it's required
+// before executing any other API call.  The username and password
+// arguments are as documented at
+// <http://www.quickbase.com/api-guide/index.html#authenticate.html>.
+//
+// Warning: URL must be of the form 'https://instance.quickbase.com/',
+// to include the trailing slash.  It'd be nice to fix this someday to
+// use a decent URL library to Do the Right Thing.
 func Authenticate(url, username, password string) (ticket Ticket, err error) {
 	doc, err := executeApiCall(url+"db/main", "API_Authenticate", map[string]string{"username": username, "password": password})
 	if err != nil {
@@ -127,6 +162,8 @@ func executeRawApiCall(url, api_call string, parameters map[string]string) (resp
 	return client.Do(http_req)
 }
 
+// SchemaModification represents the modification informatiom from
+// GetAppDTMInfo
 type SchemaModification struct {
 	Dbid           string
 	SchemaModified time.Time
@@ -232,6 +269,8 @@ func selectNodeToTime(root nodeSelector, name string) (t time.Time, err error) {
 	panic("can't get here, silly Go 1.0")
 }
 
+// EditRecord edits a QuickBase record.  The fields argument is a map
+// from field labels to the desired values.
 func EditRecord(ticket Ticket, dbid string, recordId int, fields map[string]string) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -245,6 +284,8 @@ func EditRecord(ticket Ticket, dbid string, recordId int, fields map[string]stri
 	return err
 }
 
+// DoQueryCount returns the number of rows which would have been
+// returned by DoQuery for the same query, or an error.
 func DoQueryCount(ticket Ticket, dbid, query string) (count int64, err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -264,6 +305,11 @@ func DoQueryCount(ticket Ticket, dbid, query string) (count int64, err error) {
 	return strconv.ParseInt(countNode.GetValue(), 10, 64)
 }
 
+// DoStructuredQuery queries QuickBase, returning a map from field IDs
+// to the field values for each result.  It has the advantage of being
+// slightly more space-efficient for large queries than DoQuery, and
+// not being prone to the field name/label confusion which hampers
+// DoQuery.  All arguments are as in DoQuery.
 func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string) (records []map[int]string, err error) {
 	params := map[string]string{"ticket": ticket.ticket, "fmt": "structured"}
 	if ticket.Apptoken != "" {
@@ -296,6 +342,14 @@ func DoStructuredQuery(ticket Ticket, dbid, query, clist, slist, options string)
 	return
 }
 
+// DoQuery queries QuickBase, returning a map from field labels to
+// field values for each result.  The arguments dbid, query, clist,
+// slist & options are all as documented at
+// <http://www.quickbase.com/api-guide/index.html#do_query.html>.
+//
+// Warning: DoQuery can 'lose' fields if two fields have different
+// names but the same label, e.g. 'foo ' and 'foo*' will have the same
+// label 'foo_'.
 func DoQuery(ticket Ticket, dbid, query, clist, slist, options string) (records []map[string]string, err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -348,6 +402,11 @@ func DoQuery(ticket Ticket, dbid, query, clist, slist, options string) (records 
 	return
 }
 
+// Warning: experimental
+//
+// DoQueryChan is intended to return a channel which will yield one
+// result at a time, enabling streamed handling of large result sets.
+// It has not been heavily tested, and may or may not currently work.
 func DoQueryChan(ticket Ticket, dbid, query, clist, slist string) (records chan map[string]string, err error) {
 	records = make(chan map[string]string)
 	params := map[string]string{"ticket": ticket.ticket}
@@ -499,7 +558,8 @@ func GenResultsTable(ticket Ticket, dbid, query string, columns []int) (resp *ht
 	return executeRawApiCall(ticket.url+"/db/"+dbid, "API_GenResultsTable", params)
 }
 
-// AddRecord adds a record; it uses the same conventions as EditRecord.
+// AddRecord adds a record; it uses the same conventions as
+// EditRecord.  It returns the record ID of the newly-created record.
 func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -519,6 +579,8 @@ func AddRecord(ticket Ticket, dbid string, fields map[string]string) (rid int, e
 	return strconv.Atoi(ridNode.GetValue())
 }
 
+// DeleteRecord does what it says on the tin: deletes a particular
+// record from a QuickBase table.
 func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -529,6 +591,9 @@ func DeleteRecord(ticket Ticket, dbid string, rid int) (err error) {
 	return err
 }
 
+// ChangeRecordOwner changes a record's owner, with arguments as
+// documented at
+// <http://www.quickbase.com/api-guide/index.html#change_record_owner.html>.
 func ChangeRecordOwner(ticket Ticket, dbid string, rid int, owner string) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -546,6 +611,8 @@ type User struct {
 	//Roles []Role
 }
 
+/*
+not needed yet
 type Role struct {
 	Id       int
 	Name     string
@@ -555,8 +622,10 @@ type Role struct {
 type Access struct {
 	Id   int
 	Name string
-}
+}*/
 
+// UserRoles will eventually return users with their roles; right now
+// it just returns the user's IDs and name.
 func UserRoles(ticket Ticket, dbid string) (users []User, err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
@@ -573,6 +642,8 @@ func UserRoles(ticket Ticket, dbid string) (users []User, err error) {
 	return users, nil
 }
 
+// Download retrieves a file from QuickBase, per
+// <http://www.quickbase.com/api-guide/index.html>.
 func Download(ticket Ticket, dbid string, rid, fid, vid int) (file io.ReadCloser, err error) {
 	url := fmt.Sprintf("%sup/%s/a/r%d/e%d/v%d?ticket=%s&apptoken=%s", ticket.url, dbid, rid, fid, vid, ticket.ticket, ticket.Apptoken)
 	if response, err := http.Get(url); err != nil {
@@ -584,6 +655,9 @@ func Download(ticket Ticket, dbid string, rid, fid, vid int) (file io.ReadCloser
 
 // Upload uploads a single file to a field in a QuickBase record.
 func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Reader) (err error) {
+	// Since Go is strongly-typed and I've not defined an
+	// interface for field values yet, files must be individually uploaded
+	// to records.  This is a prime opportunity for refactoring.
 	reqReader, reqWriter := io.Pipe()
 	client := &http.Client{}
 	http_req, err := http.NewRequest("POST", ticket.url+"db/"+dbid, reqReader)
@@ -611,8 +685,6 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 	//tee := io.TeeReader(resp.Body, os.Stderr)
 	doc := xmlx.New()
 	err = doc.LoadStream(resp.Body, nil)
-/*
-not needed yet
 	//err = doc.LoadStream(tee, nil)
 	if err != nil {
 		return err
@@ -622,8 +694,12 @@ not needed yet
 		return
 	}
 	return nil
-}*/
+}
 
+// ImportFromCSV imports a CSV into QuickBase.  It expects the CSV not
+// to have a header line.  The columns argument becomes the clist
+// documented in
+// <http://www.quickbase.com/api-guide/index.html#importfromcsv.html>
 func ImportFromCSV(ticket Ticket, dbid string, columns []int, r io.Reader) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
 	if ticket.Apptoken != "" {
