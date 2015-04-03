@@ -1,8 +1,8 @@
 package quickbase_test
 
 import (
-	"fmt"
 	quickbase "."
+	"fmt"
 	"os"
 	"testing"
 )
@@ -28,13 +28,13 @@ func TestDoQueryCount(t *testing.T) {
 	if ticket, err = authenticate(); err != nil {
 		t.Error(err)
 	}
-	if _, err := quickbase.DoQueryCount(ticket, os.Getenv("QUICKBASE_PROJECTS_DBID"), ""); err != nil {
+	if _, err := quickbase.DoQueryCount(ticket, os.Getenv("QUICKBASE_TABLE_DBID"), ""); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestGetAppDTMInfo(t *testing.T) {
-	received, nextAllowed, schemaModification, tableModifications, err := quickbase.GetAppDTMInfo(os.Getenv("QUICKBASE_URL"), "biki66bih")
+	received, nextAllowed, schemaModification, tableModifications, err := quickbase.GetAppDTMInfo(os.Getenv("QUICKBASE_URL"), os.Getenv("QUICKBASE_APP_DBID"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -68,3 +68,16 @@ func TestGetAppDTMInfo(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestUserRoles(t *testing.T) {
+	var ticket quickbase.Ticket
+	var err error
+	if ticket, err = authenticate(); err != nil {
+		t.Error(err)
+	}
+	_, err = quickbase.UserRoles(ticket, os.Getenv("QUICKBASE_APP_DBID"))
+	if err != nil {
+		t.Error(err)
+	}
+}
+	

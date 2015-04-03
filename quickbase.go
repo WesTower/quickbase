@@ -15,17 +15,9 @@ import (
 	"time"
 )
 
-type AuthRequest struct {
-	XMLName  xml.Name `xml:"qdbapi"`
-	Username string   `xml:"username"`
-	Password string   `xml:"password"`
-	Hours    int      `xml:"hours"`
-}
-
-type AuthReply struct {
-	XMLName xml.Name `xml:"qdbapi"`
-}
-
+// QuickBaseError represents an error returned by the QuickBase API,
+// as documented at
+// <http://www.quickbase.com/api-guide/index.html#errorcodes.html>.
 type QuickBaseError struct {
 	Message string
 	Code    int
@@ -39,12 +31,8 @@ type Ticket struct {
 	ticket   string
 	userid   string
 	url      string
-	Apptoken string
-}
-
-type Field struct {
-	Name string
-	Id   int
+	Apptoken string  // if set, then each call using this Ticket
+			 // will include this Apptoken
 }
 
 func Authenticate(url, username, password string) (ticket Ticket, err error) {
@@ -55,14 +43,14 @@ func Authenticate(url, username, password string) (ticket Ticket, err error) {
 	return Ticket{doc.SelectNode("", "ticket").GetValue(), doc.SelectNode("", "userid").GetValue(), url, ""}, nil
 }
 
-type ApiParam struct {
+type apiParam struct {
 	XMLName xml.Name
 	Value   string `xml:",chardata"`
 }
 
-type QuickBaseRequest struct {
+type quickBaseRequest struct {
 	XMLName xml.Name `xml:"qdbapi"`
-	Params  []ApiParam
+	Params  []apiParam
 }
 
 func executeApiCall(url, api_call string, parameters map[string]string) (doc *xmlx.Document, err error) {
@@ -70,13 +58,13 @@ func executeApiCall(url, api_call string, parameters map[string]string) (doc *xm
 	for _, _ = range parameters {
 		count++
 	}
-	api_params := make([]ApiParam, count)
+	api_params := make([]apiParam, count)
 	i := 0
 	for key, _ := range parameters {
-		api_params[i] = ApiParam{xml.Name{"", key}, parameters[key]}
+		api_params[i] = apiParam{xml.Name{"", key}, parameters[key]}
 		i++
 	}
-	req := QuickBaseRequest{Params: api_params}
+	req := quickBaseRequest{Params: api_params}
 	xml_req, err := xml.Marshal(req)
 	if err != nil {
 		return
@@ -118,13 +106,13 @@ func executeRawApiCall(url, api_call string, parameters map[string]string) (resp
 	for _, _ = range parameters {
 		count++
 	}
-	api_params := make([]ApiParam, count)
+	api_params := make([]apiParam, count)
 	i := 0
 	for key, _ := range parameters {
-		api_params[i] = ApiParam{xml.Name{"", key}, parameters[key]}
+		api_params[i] = apiParam{xml.Name{"", key}, parameters[key]}
 		i++
 	}
-	req := QuickBaseRequest{Params: api_params}
+	req := quickBaseRequest{Params: api_params}
 	xml_req, err := xml.Marshal(req)
 	if err != nil {
 		return
@@ -224,11 +212,11 @@ func GetAppDTMInfo(baseUrl, dbid string) (received, nextAllowed time.Time, schem
 	return
 }
 
-type NodeSelector interface {
+type nodeSelector interface {
 	SelectNode(space, local string) *xmlx.Node
 }
 
-func selectNodeToTime(root NodeSelector, name string) (t time.Time, err error) {
+func selectNodeToTime(root nodeSelector, name string) (t time.Time, err error) {
 	if root == nil {
 		return t, fmt.Errorf("Nil root passed in")
 	}
@@ -375,13 +363,13 @@ func DoQueryChan(ticket Ticket, dbid, query, clist, slist string) (records chan 
 	if slist != "" {
 		params["slist"] = slist
 	}
-	api_params := make([]ApiParam, len(params))
+	api_params := make([]apiParam, len(params))
 	i := 0
 	for key, val := range params {
-		api_params[i] = ApiParam{xml.Name{"", key}, val}
+		api_params[i] = apiParam{xml.Name{"", key}, val}
 		i++
 	}
-	req := QuickBaseRequest{Params: api_params}
+	req := quickBaseRequest{Params: api_params}
 	pipe_reader, pipe_writer := io.Pipe()
 	http_req, err := http.NewRequest("POST", ticket.url+"db/"+dbid, pipe_reader)
 	if err != nil {
@@ -488,11 +476,10 @@ func DoQueryChan(ticket Ticket, dbid, query, clist, slist string) (records chan 
 	panic("should never have gotten here")
 }
 
-type AuthInfo struct {
-	Ticket   Ticket
-	Apptoken string
-}
-
+// GenResultTable queries QuickBase, returning the results an
+// http.Response streaming the CSV response.  This can be one of the
+// most efficient ways to retrieve a massive amount of data from
+// QuickBase, with none of the overhead of the XML response format.
 func GenResultsTable(ticket Ticket, dbid, query string, columns []int) (resp *http.Response, err error) {
 	strCols := make([]string, len(columns))
 	for i, col := range columns {
@@ -595,9 +582,7 @@ func Download(ticket Ticket, dbid string, rid, fid, vid int) (file io.ReadCloser
 	}
 }
 
-// Since Go is strongly-typed and I've not defined an interface for
-// field values yet, files must be individually uploaded to records.
-// This is a prime opportunity for refactoring.
+// Upload uploads a single file to a field in a QuickBase record.
 func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Reader) (err error) {
 	reqReader, reqWriter := io.Pipe()
 	client := &http.Client{}
@@ -626,6 +611,8 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 	//tee := io.TeeReader(resp.Body, os.Stderr)
 	doc := xmlx.New()
 	err = doc.LoadStream(resp.Body, nil)
+/*
+not needed yet
 	//err = doc.LoadStream(tee, nil)
 	if err != nil {
 		return err
@@ -635,7 +622,7 @@ func Upload(ticket Ticket, dbid string, rid, fid int, filename string, r io.Read
 		return
 	}
 	return nil
-}
+}*/
 
 func ImportFromCSV(ticket Ticket, dbid string, columns []int, r io.Reader) (err error) {
 	params := map[string]string{"ticket": ticket.ticket}
