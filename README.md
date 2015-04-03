@@ -1,6 +1,6 @@
 # quickbase
 --
-    import "."
+    import "github.com/WesTower/quickbase"
 
 Package go-quickbase provides access to Intuit's QuickBase API.
 
