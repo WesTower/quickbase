@@ -2,7 +2,7 @@ package quickbase_test
 
 import (
 	"fmt"
-	"github.com/WesTower/freezing-avenger/lib/quickbase"
+	quickbase "."
 	"os"
 	"testing"
 )
